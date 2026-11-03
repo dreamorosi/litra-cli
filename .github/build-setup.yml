@@ -1,0 +1,18 @@
+# cargo-dist inserts these steps into the release build job after checkout.
+- name: Require the matching release tag as the workflow ref
+  if: github.event_name == 'workflow_dispatch'
+  run: |
+    TAG=$(jq -r '.inputs.tag' "$GITHUB_EVENT_PATH")
+    if [ "$TAG" = dry-run ]; then
+      exit 0
+    fi
+    VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
+    if [ "$TAG" != "v$VERSION" ] || [ "$GITHUB_REF" != "refs/tags/$TAG" ]; then
+      echo "Select ref v$VERSION and input tag=v$VERSION when dispatching Release." >&2
+      exit 1
+    fi
+- name: Check and test before packaging
+  run: |
+    cargo fmt --check
+    cargo clippy --locked --all-targets -- -D warnings
+    cargo test --locked

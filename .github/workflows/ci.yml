@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - name: Check formatting
+        run: cargo fmt --check
+      - name: Check warnings
+        run: cargo clippy --locked --all-targets -- -D warnings
+      - name: Test without USB hardware
+        run: cargo test --locked
+      - name: Build and smoke-test the CLI
+        run: |
+          cargo build --release --locked
+          target/release/litra --help
+          test "$(target/release/litra --version)" = "litra $(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')"

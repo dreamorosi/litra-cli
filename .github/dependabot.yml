@@ -1,0 +1,16 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    ignore:
+      # These pins are owned by dist-workspace.toml. Regenerate release.yml
+      # and update matching pins in the handwritten workflows together.
+      - dependency-name: actions/checkout
+      - dependency-name: actions/upload-artifact
+      - dependency-name: actions/download-artifact
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: monthly

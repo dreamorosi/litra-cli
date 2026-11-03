@@ -1,0 +1,63 @@
+name: Bump version and tag
+
+# This workflow writes to main and creates a tag, but does not release.
+# Dispatch it only after approval. Then dispatch Release on the new tag.
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Version bump level, or none to tag the current version"
+        required: true
+        default: patch
+        type: choice
+        options: [none, patch, minor, major]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: version-bump
+  cancel-in-progress: false
+
+jobs:
+  bump-and-tag:
+    if: github.ref == 'refs/heads/main'
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Install cargo-edit
+        if: inputs.bump != 'none'
+        uses: taiki-e/install-action@86f7a0ffb25f40114606501a311ebcfaf882ea32 # v2.9.4
+        with:
+          tool: cargo-edit
+      - name: Bump version
+        if: inputs.bump != 'none'
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: |
+          cargo set-version --bump "$BUMP"
+          cargo update --workspace
+      - name: Test before tagging
+        run: cargo test --locked
+      - name: Commit, tag, and push
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: |
+          set -euo pipefail
+          VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
+          if git show-ref --verify --quiet "refs/tags/v${VERSION}"; then
+            echo "Tag v${VERSION} already exists" >&2
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [ "$BUMP" != none ]; then
+            git add Cargo.toml Cargo.lock
+            git commit -m "chore: release v${VERSION}"
+          fi
+          git tag "v${VERSION}"
+          git push --atomic origin HEAD:main "refs/tags/v${VERSION}"
+          echo "Tagged v${VERSION}. After approval, run Release on ref v${VERSION} with input tag=v${VERSION}." >> "$GITHUB_STEP_SUMMARY"
